@@ -42,6 +42,7 @@
 #include "dom/measure.h"
 #include "dom/guitarbend.h"
 #include "dom/laissezvib.h"
+#include "dom/parenthesis.h"
 #include "dom/partialtie.h"
 
 #include "tlayout.h"
@@ -122,7 +123,7 @@ SpannerSegment* SlurTieLayout::layoutSystem(Slur* item, System* system, LayoutCo
         if (sc) {
             Tie* tie = (item->up() ? sc->upNote() : sc->downNote())->tieFor();
             PointF endPoint = PointF();
-            if (tie && (tie->isInside() || tie->isPartialTie() || tie->up() != item->up())) {
+            if (tie && (tie->isInside() || tie->up() != item->up())) {
                 // there is a tie that starts on this chordrest
                 tie = nullptr;
             }
@@ -1858,17 +1859,34 @@ void SlurTieLayout::setPartialTieEndPos(PartialTie* item, SlurTiePos& sPos)
         return;
     }
 
+    auto shouldSkipSegment = [](const Segment* adjSeg, staff_idx_t staff) {
+        bool inactiveOrInvisible = !adjSeg->isActive() || !adjSeg->enabled() || adjSeg->allElementsInvisible()
+                                   || !adjSeg->hasElements(staff);
+        bool isAboveStaff = adjSeg->isBreathType() || adjSeg->hasTimeSigAboveStaves();
+        return inactiveOrInvisible || isAboveStaff;
+    };
+
     const Segment* adjSeg = outgoing ? seg->next1() : seg->prev1();
-    while (adjSeg && (!adjSeg->isActive() || !adjSeg->enabled())) {
+    while (adjSeg && shouldSkipSegment(adjSeg, item->vStaffIdx())) {
         adjSeg = outgoing ? adjSeg->next1() : adjSeg->prev1();
     }
 
     double widthToSegment = 0.0;
     if (adjSeg) {
         EngravingItem* element = adjSeg->element(staff2track(item->vStaffIdx()));
+        track_idx_t strack = track2staff(item->track());
+        track_idx_t etrack = strack + VOICES - 1;
+        for (EngravingItem* paren : adjSeg->findAnnotations(ElementType::PARENTHESIS, strack, etrack)) {
+            if ((outgoing && toParenthesis(paren)->direction() == DirectionH::LEFT)
+                || (!outgoing && toParenthesis(paren)->direction() == DirectionH::RIGHT)) {
+                element = paren;
+                break;
+            }
+        }
+
         const double elementWidth = element ? element->width() : 0.0;
-        widthToSegment = outgoing ? adjSeg->xPosInSystemCoords() - sPos.p1.x() : sPos.p2.x()
-                         - (adjSeg->xPosInSystemCoords() + elementWidth);
+        const double elPos = adjSeg->xPosInSystemCoords() + (element ? element->pos().x() + element->shape().bbox().x() : 0.0);
+        widthToSegment = outgoing ? elPos - sPos.p1.x() : sPos.p2.x() - (elPos + elementWidth);
         widthToSegment -= 0.25 * item->spatium();
     }
 

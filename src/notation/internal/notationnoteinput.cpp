@@ -421,10 +421,16 @@ void NotationNoteInput::addNote(const NoteInputParams& params, NoteAddingMode ad
 {
     TRACEFUNC;
 
-    startEdit(TranslatableString("undoableAction", "Enter note"));
-
     bool addToUpOnCurrentChord = addingMode == NoteAddingMode::CurrentChord;
     bool insertNewChord = addingMode == NoteAddingMode::InsertChord;
+
+    if (addToUpOnCurrentChord) {
+        startEdit(TranslatableString("undoableAction", "Add note to chord"));
+    } else if (insertNewChord) {
+        startEdit(TranslatableString("undoableAction", "Insert note"));
+    } else {
+        startEdit(TranslatableString("undoableAction", "Enter note"));
+    }
     score()->cmdAddPitch(params, addToUpOnCurrentChord, insertNewChord);
 
     apply();
@@ -600,6 +606,17 @@ void NotationNoteInput::moveInputNotes(bool up, PitchMode mode)
     }
 
     setInputNotes(notes);
+}
+
+void NotationNoteInput::setRestMode(bool rest)
+{
+    mu::engraving::InputState& is = score()->inputState();
+    if (is.rest() == rest) {
+        return;
+    }
+
+    is.setRest(rest);
+    notifyAboutStateChanged();
 }
 
 void NotationNoteInput::setAccidental(AccidentalType accidentalType)
@@ -846,7 +863,14 @@ void NotationNoteInput::updateInputState()
 {
     TRACEFUNC;
 
-    score()->inputState().update(score()->selection());
+    NoteInputState& is = score()->inputState();
+    is.update(score()->selection());
+
+    if (!configuration()->addAccidentalDotsArticulationsToNextNoteEntered()) {
+        is.setAccidentalType(AccidentalType::NONE);
+        is.setDots(0);
+        is.setArticulationIds({});
+    }
 
     notifyAboutStateChanged();
 }
