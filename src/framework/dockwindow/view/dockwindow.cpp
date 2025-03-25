@@ -234,7 +234,7 @@ void DockWindow::loadPage(const QString& uri, const QVariantMap& params)
             } else {
                 m_mainWindow->windowHandle()->setVisible(true);
             }
-
+            
             notifyAboutPageLoaded();
         });
     } else {
@@ -302,6 +302,10 @@ void DockWindow::restoreDefaultLayout()
 
     m_reloadCurrentPageAllowed = false;
     for (const DockPageView* page : m_pages.list()) {
+        if(page == m_currentPage) {
+            restorePageState(page->objectName());
+            continue;
+        }
         uiConfiguration()->setPageState(page->objectName(), QByteArray());
     }
 
@@ -491,11 +495,11 @@ bool DockWindow::doLoadPage(const QString& uri, const QVariantMap& params)
     IF_ASSERT_FAILED(newPage) {
         return false;
     }
-
+    
     loadPageContent(newPage);
     restorePageState(newPage->objectName());
     initDocks(newPage);
-
+    
     newPage->setParams(params);
 
     m_currentPage = newPage;
