@@ -3252,8 +3252,7 @@ void TextBase::editDrag(EditData& ed)
     score()->dragPosition(canvasPos(), &si, &newSeg, spacingFactor, allowTimeAnchor());
     if (newSeg && (newSeg != segment || staffIdx() != si)) {
         undoMoveSegment(newSeg, newSeg->tick() - segment->tick());
-        double deltaX = newSeg->pageX() - segment->pageX();
-        PointF offsetShift = PointF(deltaX, 0.0);
+        PointF offsetShift = newSeg->pagePos() - segment->pagePos();
         shiftInitOffset(ed, offsetShift);
     }
 }
@@ -3292,7 +3291,7 @@ void TextBase::shiftInitOffset(EditData& ed, const PointF& offsetShift)
 
 bool TextBase::supportsNonTextualEdit() const
 {
-    return hasParentSegment();
+    return hasParentSegment() && !m_text.empty();
 }
 
 void TextBase::startEditNonTextual(EditData& ed)

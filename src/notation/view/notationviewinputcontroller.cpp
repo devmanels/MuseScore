@@ -34,6 +34,8 @@
 #include "engraving/dom/drumset.h"
 #include "engraving/dom/shadownote.h"
 
+#include "defer.h"
+
 using namespace mu;
 using namespace mu::notation;
 using namespace mu::engraving;
@@ -612,6 +614,13 @@ void NotationViewInputController::mousePressEvent(QMouseEvent* event)
     EngravingItem* hitElement = nullptr;
     staff_idx_t hitStaffIndex = muse::nidx;
 
+    DEFER {
+        EngravingItem* playbackStartElement = resolveStartPlayableElement();
+        if (playbackStartElement) {
+            playbackController()->seekElement(playbackStartElement);
+        }
+    };
+
     if (!m_readonly) {
         m_prevHitElement = hitElementContext().element;
 
@@ -645,10 +654,6 @@ void NotationViewInputController::mousePressEvent(QMouseEvent* event)
     }
 
     if (playbackController()->isPlaying()) {
-        if (seekAllowed(hitElement)) {
-            playbackController()->seekElement(hitElement);
-        }
-
         return;
     }
 
@@ -723,11 +728,6 @@ void NotationViewInputController::mousePressEvent(QMouseEvent* event)
         } else {
             viewInteraction()->select({ hitElement }, selectType, hitStaffIndex);
         }
-    }
-
-    EngravingItem* playbackStartElement = resolveStartPlayableElement();
-    if (playbackStartElement) {
-        playbackController()->seekElement(playbackStartElement);
     }
 
     if (button == Qt::LeftButton) {
@@ -1115,13 +1115,13 @@ void NotationViewInputController::hoverMoveEvent(QHoverEvent* event)
 
 bool NotationViewInputController::shortcutOverrideEvent(QKeyEvent* event)
 {
-    if (viewInteraction()->isElementEditStarted()) {
-        return viewInteraction()->isEditAllowed(event);
-    }
-
     const bool editTextKeysFound = event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter;
     if (editTextKeysFound && startTextEditingAllowed()) {
         return true;
+    }
+
+    if (viewInteraction()->isElementEditStarted()) {
+        return viewInteraction()->isEditAllowed(event);
     }
 
     return tryPercussionShortcut(event);
@@ -1129,13 +1129,11 @@ bool NotationViewInputController::shortcutOverrideEvent(QKeyEvent* event)
 
 void NotationViewInputController::keyPressEvent(QKeyEvent* event)
 {
-    if (viewInteraction()->isElementEditStarted()) {
+    if (startTextEditingAllowed() && (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)) {
+        dispatcher()->dispatch("edit-text");
+        event->accept();
+    } else if (viewInteraction()->isElementEditStarted()) {
         viewInteraction()->editElement(event);
-    } else if (startTextEditingAllowed()) {
-        if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
-            dispatcher()->dispatch("edit-text");
-            event->accept();
-        }
     } else if (event->key() == Qt::Key_Shift) {
         updateShadowNotePopupVisibility();
     }
@@ -1395,6 +1393,10 @@ void NotationViewInputController::updateShadowNotePopupVisibility(bool forceHide
 EngravingItem* NotationViewInputController::resolveStartPlayableElement() const
 {
     EngravingItem* hitElement = hitElementContext().element;
+
+    if (playbackController()->isPlaying()) {
+        return seekAllowed(hitElement) ? hitElement : nullptr;
+    }
 
     INotationSelectionPtr selection = viewInteraction()->selection();
     if (!selection->isRange()) {

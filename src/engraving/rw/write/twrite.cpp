@@ -2134,6 +2134,10 @@ void TWrite::write(const KeySig* item, XmlWriter& xml, WriteContext& ctx)
         xml.tag("mode", TConv::toXml(item->mode()));
     }
 
+    if (item->isCourtesy()) {
+        xml.tag("isCourtesy", item->isCourtesy());
+    }
+
     if (!item->showCourtesy()) {
         xml.tag("showCourtesySig", item->showCourtesy());
     }
@@ -3170,7 +3174,7 @@ void TWrite::write(const TremoloTwoChord* item, XmlWriter& xml, WriteContext& ct
     xml.endElement();
 }
 
-void TWrite::write(const TremoloBar* item, XmlWriter& xml, WriteContext&)
+void TWrite::write(const TremoloBar* item, XmlWriter& xml, WriteContext& ctx)
 {
     xml.startElement(item);
     writeProperty(item, xml, Pid::MAG);
@@ -3179,6 +3183,7 @@ void TWrite::write(const TremoloBar* item, XmlWriter& xml, WriteContext&)
     for (const PitchValue& v : item->points()) {
         xml.tag("point", { { "time", v.time }, { "pitch", v.pitch }, { "vibrato", v.vibrato } });
     }
+    writeItemProperties(item, xml, ctx);
     xml.endElement();
 }
 

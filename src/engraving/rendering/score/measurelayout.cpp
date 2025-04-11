@@ -952,7 +952,12 @@ void MeasureLayout::layoutMeasure(MeasureBase* currentMB, LayoutContext& ctx)
         if (!s.isChordRestType()) {
             continue;
         }
-        BeamLayout::layoutNonCrossBeams(&s, ctx);
+        for (EngravingItem* item : s.elist()) {
+            if (!item || !item->isChordRest() || !ctx.dom().staff(item->vStaffIdx())->show()) {
+                continue;
+            }
+            BeamLayout::layoutNonCrossBeams(toChordRest(item), ctx);
+        }
     }
 
     for (staff_idx_t staffIdx = 0; staffIdx < ctx.dom().nstaves(); ++staffIdx) {
@@ -988,7 +993,7 @@ void MeasureLayout::layoutMeasure(MeasureBase* currentMB, LayoutContext& ctx)
             }
         } else if (segment.isChordRestType()) {
             for (EngravingItem* e : segment.annotations()) {
-                if (e->isSymbol()) {
+                if (e->isSymbol() || e->isHarmony() || e->isFretDiagram()) {
                     TLayout::layoutItem(e, ctx);
                 }
             }
@@ -1349,6 +1354,9 @@ void MeasureLayout::layoutMeasureElements(Measure* m, LayoutContext& ctx)
                     // two- or four-measure repeat, center on following barline
                     double measureWidth = x2 - s.x() + .5 * (m->styleP(Sid::barWidth));
                     e->mutldata()->setPosX(measureWidth - .5 * e->width());
+                    if (toMeasureRepeat(e)->numMeasures() == 4 && ctx.conf().styleB(Sid::fourMeasureRepeatShowExtenders)) {
+                        TLayout::layoutMeasureRepeatExtender(toMeasureRepeat(e), toMeasureRepeat(e)->mutldata(), ctx);
+                    }
                 } else {
                     // full measure rest or one-measure repeat, center within this measure
                     TLayout::layoutItem(e, ctx);
@@ -1732,6 +1740,7 @@ void MeasureLayout::setCourtesyTimeSig(Measure* m, const Fraction& refSigTick, c
             courtesyTimeSig->setTrack(track);
             courtesyTimeSig->setGenerated(true);
             courtesyTimeSig->setParent(courtesySigSeg);
+            courtesyTimeSig->setIsCourtesy(true);
             courtesySigSeg->add(courtesyTimeSig);
         }
 
@@ -1856,6 +1865,7 @@ void MeasureLayout::setCourtesyKeySig(Measure* m, const Fraction& refSigTick, co
             courtesyKeySig->setTrack(track);
             courtesyKeySig->setGenerated(true);
             courtesyKeySig->setParent(courtesySigSeg);
+            courtesyKeySig->setIsCourtesy(true);
             courtesySigSeg->add(courtesyKeySig);
         }
         courtesyKeySig->setKeySigEvent(refKey);
@@ -1970,6 +1980,7 @@ void MeasureLayout::setCourtesyClef(Measure* m, const Fraction& refClefTick, con
             courtesyClef->setSmall(true);
             courtesyClef->setParent(courtesyClefSeg);
             courtesyClef->setClefType(actualClef->clefType());
+            courtesyClef->setIsCourtesy(true);
             courtesyClefSeg->add(courtesyClef);
         }
 
@@ -2921,10 +2932,10 @@ void MeasureLayout::layoutTimeTickAnchors(Measure* m, LayoutContext& ctx)
         }
 
         Segment* refCRSeg = m->findSegmentR(SegmentType::ChordRest, segment.rtick());
-        if (!refCRSeg) {
-            refCRSeg = segment.prev();
+        if (!(refCRSeg && refCRSeg->isActive())) {
+            refCRSeg = segment.prevActive();
             while (refCRSeg && !refCRSeg->isChordRestType()) {
-                refCRSeg = refCRSeg->prev();
+                refCRSeg = refCRSeg->prevActive();
             }
         }
 
@@ -2937,7 +2948,7 @@ void MeasureLayout::layoutTimeTickAnchors(Measure* m, LayoutContext& ctx)
         Fraction relativeTick = segment.rtick() - refCRSeg->rtick();
 
         Segment* nextSeg = m->findSegmentR(SegmentType::ChordRest, refCRSeg->rtick() + refCRSeg->ticks());
-        if (!nextSeg) {
+        if (!(nextSeg && nextSeg->isActive())) {
             nextSeg = m->findSegmentR(SegmentType::BarLineType, refCRSeg->rtick() + refCRSeg->ticks());
         }
         double width = nextSeg ? nextSeg->x() - refCRSeg->x() : refCRSeg->width();
